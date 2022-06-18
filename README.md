@@ -223,6 +223,10 @@ df -h
 ```
 for i in `seq 1 $(cat /proc/cpuinfo |grep "physical id" |wc -l)`; do dd if=/dev/zero of=/dev/null & done
 ```
+## EFS寫入測試:
+```
+sudo fio --name=fio-efs --filesize=10G --filename=./efs/fio-efs-test.img --bs=1M --nrfiles=1 --direct=1 --sync=0 --rw=write --iodepth=200 --ioengine=libaio
+```
 ## 查看CPU以及運行工作指令:
 
 ```bash
@@ -1523,8 +1527,13 @@ RUN chmod +x /server
 
 ```
 
+## SQL匯入匯出
+```
+sudo mysqldump --databases cafe_db -u root -p > CafeDbDump.sql
+source /usr/bin/CafeDbDump.sql 
+```
 
-
+## 垂直擴展(購買更好的機器) 水平擴展(增加機器的數量)
 
 https://d3pr554kr9efwx.cloudfront.net/
 
@@ -1537,3 +1546,147 @@ https://termi.us/3v6#id=bcf6cb34-b02b-4bb9-b00e-e81b36b49cca&scheme=termius%20da
 http://34.96.84.180/
 
 https://termi.us/3v6#id=71158da6-c386-4fcc-b1fe-ccbed88c9aa8&scheme=termius%20dark&title=ec2-107-22-140-101.compute-1.amazonaws.com&pwd=BA316CFD72776D001CC822BDE9489F46038D8D45&connectionId=ecc127e9-3fc7-4a7d-bec9-d480ff4a87be
+
+## SQS訊息傳送順序
+1.Standard queues 
+EX:遊樂園雲霄飛車一台6個人，缺了3人，服務人員會尋找剛好人數的遊客補滿雲霄飛車\
+2.FIFO 
+EX:先到的餐點先給
+## SQS訊息傳送方式
+1.Dead-letter queue support : 訊息傳送失敗，重新傳送(排隊)\
+2.Visibility timeout : 訊息傳送失敗，一定時間後刪除\
+3.Long polling : 等到有訊息，或是timeout才回傳結果\
+## SQS總結
+6.適合使用SQS:服務與服務之間交流、是否觸發\
+7.不適合使用SQS:特定訊息(改使用AWS MQ)、大訊息量\
+## 好的架構
+1.卓越營運\
+2.安全性\
+3.可靠性\
+4.效能效率最佳化\
+5.成本最佳化\
+6.永續發展
+## 去年全國賽題目
+1.基本ECS架構
+![](https://i.imgur.com/LANf6Ml.png)
+2.給一個架構，讓你修好(CTF)
+![](https://i.imgur.com/DtmKSS6.png)
+3.架構設計(15分鐘想，15分鐘報告)
+![](https://i.imgur.com/e0YXDeA.png)
+## 練習題
+![](https://i.imgur.com/VVnmw8V.png)
+ANS:D，long polling 會等到有訊息進時，再發送，不會拉到空佇列
+## 微服務定義、特點
+單一的Application拆開來變成多個獨立Application
+1.去中心化\
+2.獨立的\
+3.多語言\
+4.專門的\
+5.黑盒子(Application彼此不知道彼此之間在幹嘛)\
+6.你建構的，只有你會知道
+## 容器
+包含你的應用程式code、運行系統、依賴、配置
+![](https://i.imgur.com/wCrdAlW.png)
+## AWS serverless服務
+![](https://i.imgur.com/XoxyWPC.png)
+## 使用lambda實施無伺服器架構
+![](https://i.imgur.com/t2M8ts4.png)
+1.創建lambda function
+Runtime: Python 3.7
+2.選擇IAM role
+Existing role: Lambda-Load-Inventory-Role(讓Lambda可以訪問s3)
+3.貼上source code，之後deploy
+```
+# Load-Inventory Lambda function
+#
+# This function is triggered by an object being created in an Amazon S3 bucket.
+# The file is downloaded and each line is inserted into a DynamoDB table.
+import json, urllib, boto3, csv
+# Connect to S3 and DynamoDB
+s3 = boto3.resource('s3')
+dynamodb = boto3.resource('dynamodb')
+# Connect to the DynamoDB tables
+inventoryTable = dynamodb.Table('Inventory');
+# This handler is run every time the Lambda function is triggered
+def lambda_handler(event, context):
+  # Show the incoming event in the debug log
+  print("Event received by Lambda function: " + json.dumps(event, indent=2))
+  # Get the bucket and object key from the Event
+  bucket = event['Records'][0]['s3']['bucket']['name']
+  key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
+  localFilename = '/tmp/inventory.txt'
+  # Download the file from S3 to the local filesystem
+  try:
+    s3.meta.client.download_file(bucket, key, localFilename)
+  except Exception as e:
+    print(e)
+    print('Error getting object {} from bucket {}. Make sure they exist and your bucket is in the same region as this function.'.format(key, bucket))
+    raise e
+  # Read the Inventory CSV file
+  with open(localFilename) as csvfile:
+    reader = csv.DictReader(csvfile, delimiter=',')
+    # Read each row in the file
+    rowCount = 0
+    for row in reader:
+      rowCount += 1
+      # Show the row in the debug log
+      print(row['store'], row['item'], row['count'])
+      try:
+        # Insert Store, Item and Count into the Inventory table
+        inventoryTable.put_item(
+          Item={
+            'Store':  row['store'],
+            'Item':   row['item'],
+            'Count':  int(row['count'])})
+      except Exception as e:
+         print(e)
+         print("Unable to insert data into DynamoDB table".format(e))
+    # Finished!
+    return "%d counts inserted" % rowCount
+```
+4.創建bucket桶\
+5.新增事件通知(讓S3創建東西時觸發Lambda)\
+6.上傳檔案\
+7.創建SNS，當缺貨時發電子郵件\
+8.創建測試用Lambda，source code:
+```
+# Stock Check Lambda function
+#
+# This function is triggered when values are inserted into the Inventory DynamoDB table.
+# Inventory counts are checked and if an item is out of stock, a notification is sent to an SNS Topic.
+import json, boto3
+# This handler is run every time the Lambda function is triggered
+def lambda_handler(event, context):
+  # Show the incoming event in the debug log
+  print("Event received by Lambda function: " + json.dumps(event, indent=2))
+  # For each inventory item added, check if the count is zero
+  for record in event['Records']:
+    newImage = record['dynamodb'].get('NewImage', None)
+    if newImage:      
+      count = int(record['dynamodb']['NewImage']['Count']['N'])  
+      if count == 0:
+        store = record['dynamodb']['NewImage']['Store']['S']
+        item  = record['dynamodb']['NewImage']['Item']['S']  
+        # Construct message to be sent
+        message = store + ' is out of stock of ' + item
+        print(message)  
+        # Connect to SNS
+        sns = boto3.client('sns')
+        alertTopic = 'NoStock'
+        snsTopicArn = [t['TopicArn'] for t in sns.list_topics()['Topics']
+                        if t['TopicArn'].lower().endswith(':' + alertTopic.lower())][0]  
+        # Send message to SNS
+        sns.publish(
+          TopicArn=snsTopicArn,
+          Message=message,
+          Subject='Inventory Alert!',
+          MessageStructure='raw'
+        )
+  # Finished!
+  return 'Successfully processed {} records.'.format(len(event['Records']))
+```
+9.Add trigger\
+Select a trigger: DynamoDB\
+DynamoDB Table: Inventory\
+10.complete!!
+
