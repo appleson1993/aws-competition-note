@@ -474,6 +474,8 @@ http://s3.amazonaws.com/ee-assets-prod-us-east-1/modules/gd2015-loadgen/v0.1/ser
 
 https://s3.amazonaws.com/ee-assets-prod-us-east-1/modules/gd2015-loadgen/v0.1/server2
 
+https://s3.amazonaws.com/ee-assets-prod-us-east-1/modules/gd2015-loadgen/v0.1/server3
+
 
 https://d102pi46qqn7m7.cloudfront.net/
 
@@ -1367,7 +1369,8 @@ ECS待補充
 > AWS RDS
 > 
 > Task Validation
-> 
+
+
 > The task will be completed automatically if you have done the required changes correctly.
 > 
 > 
